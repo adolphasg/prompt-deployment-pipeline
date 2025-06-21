@@ -1,7 +1,7 @@
 {
     "output_file": "welcome_{{student_name|lower}}.html",
     "variables": {
-      "student_name": "Jordan",
+      "student_name": "Adolphas",
       "tip1": "Explore the course dashboard",
       "tip2": "Join the discussion forum",
       "tip3": "Set weekly study reminders"

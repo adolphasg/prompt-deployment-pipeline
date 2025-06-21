@@ -1,3 +1,4 @@
+# generate_and_upload.py
 import json
 import os
 import pathlib
@@ -111,3 +112,4 @@ def main(env: str = "beta") -> None:
 
 if __name__ == "__main__":
     main(os.getenv("DEPLOY_ENV", "beta"))
+    
