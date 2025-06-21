@@ -1,8 +1,8 @@
 # generate_and_upload.py
-import json
-import os
-import pathlib
 import boto3
+import os
+import json
+import pathlib
 import jinja2
 from jinja2 import Template
 
@@ -112,4 +112,4 @@ def main(env: str = "beta") -> None:
 
 if __name__ == "__main__":
     main(os.getenv("DEPLOY_ENV", "beta"))
-    
+
