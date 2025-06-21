@@ -95,3 +95,4 @@ def main(env: str = "beta") -> None:
 
 if __name__ == "__main__":
     main(os.getenv("DEPLOY_ENV", "beta"))
+    
