@@ -13,10 +13,8 @@ PROD_PREFIX = os.getenv("PROD_PREFIX", "prod/")
 # ---------- Helpers ----------
 
 def get_region() -> str:
-    region = (
-        os.getenv("AWS_REGION")
-        or os.getenv("AWS_DEFAULT_REGION")
-    )
+    """Return AWS region from env vars or raise a helpful error."""
+    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
     if not region:
         raise ValueError(
             "[❌] No AWS region specified.\n"
@@ -26,13 +24,13 @@ def get_region() -> str:
 
 
 def render_prompt(template_path: str, config: dict) -> str:
-    """Fill a Jinja2 template with variables from a JSON config file."""
+    """Render a Jinja2 prompt template with variables from config."""
     template = jinja2.Template(pathlib.Path(template_path).read_text())
     return template.render(**config["variables"])
 
 
 def construct_body(prompt: str, max_tokens: int = 300) -> dict:
-    """Build the Bedrock request payload."""
+    """Create the invoke‑body expected by Amazon Bedrock."""
     return {
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": max_tokens,
@@ -42,8 +40,8 @@ def construct_body(prompt: str, max_tokens: int = 300) -> dict:
     }
 
 
-def call_bedrock(prompt: str, max_tokens: int = 300, region: str = "us-east-1") -> str:
-    """Send the prompt to Bedrock and return Claude’s text completion."""
+def call_bedrock(prompt: str, max_tokens: int, region: str) -> str:
+    """Invoke Claude 3 via Bedrock and return the full text response."""
     br = boto3.client("bedrock-runtime", region_name=region)
     resp = br.invoke_model(
         body=json.dumps(construct_body(prompt, max_tokens)),
@@ -64,11 +62,10 @@ def main(env: str = "beta") -> None:
         if env == "beta"
         else os.getenv("S3_BUCKET_PROD")
     )
-
     if not bucket:
         raise ValueError(
             f"[❌] No S3 bucket defined for environment '{env}'.\n"
-            f"➡️  Set {'S3_BUCKET_BETA' if env == 'beta' else 'S3_BUCKET_PROD'} and try again."
+            f"➡️  Set {'S3_BUCKET_BETA' if env == 'beta' else 'S3_BUCKET_PROD'}."
         )
 
     prefix = BETA_PREFIX if env == "beta" else PROD_PREFIX
@@ -77,26 +74,40 @@ def main(env: str = "beta") -> None:
     for config_path in pathlib.Path("prompts").glob("*.json"):
         cfg = json.loads(config_path.read_text())
 
-        # 1️⃣ Render template → prompt text
+        # 1️⃣ Prompt text
         tmpl_file = f"prompt_templates/{config_path.stem.replace('_prompt', '')}.txt"
         rendered_prompt = render_prompt(tmpl_file, cfg)
 
-        # 2️⃣ Render output filename from template using variables
-        filename_template = cfg["output_file"]
-        filename_rendered = Template(filename_template).render(**cfg["variables"])
+        # 2️⃣ Output filename (render placeholders)
+        filename_rendered = Template(cfg["output_file"]).render(**cfg["variables"])
 
-        # 3️⃣ Send to Bedrock → completion
-        completion = call_bedrock(rendered_prompt, region=region)
+        # 3️⃣ Claude 3 completion
+        completion = call_bedrock(rendered_prompt, max_tokens=300, region=region)
 
-        # 4️⃣ Write to disk
+        # 4️⃣ Write local file
         out_file = pathlib.Path("outputs") / filename_rendered
         out_file.write_text(completion, encoding="utf-8")
 
-        # 5️⃣ Upload to S3 with rendered filename
+        # 5️⃣ Upload original file
         s3_key = f"{prefix}{filename_rendered}"
-        s3.upload_file(out_file.as_posix(), bucket, s3_key, ExtraArgs={"ContentType": "text/html"})
+        s3.upload_file(
+            out_file.as_posix(),
+            bucket,
+            s3_key,
+            ExtraArgs={"ContentType": "text/html"}
+        )
         print(f"✅ Uploaded ➜  s3://{bucket}/{s3_key}")
 
+        # 6️⃣ OPTIONAL: also publish as index.html when requested
+        if cfg.get("make_index", False):
+            index_key = f"{prefix}index.html"
+            s3.upload_file(
+                out_file.as_posix(),
+                bucket,
+                index_key,
+                ExtraArgs={"ContentType": "text/html"}
+            )
+            print(f"   ↪️  Also published as s3://{bucket}/{index_key}")
 
 if __name__ == "__main__":
     main(os.getenv("DEPLOY_ENV", "beta"))
