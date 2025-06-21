@@ -3,6 +3,7 @@ import os
 import pathlib
 import boto3
 import jinja2
+from jinja2 import Template
 
 # ---------- Constants ----------
 MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0"
@@ -80,19 +81,22 @@ def main(env: str = "beta") -> None:
         tmpl_file = f"prompt_templates/{config_path.stem.replace('_prompt', '')}.txt"
         rendered_prompt = render_prompt(tmpl_file, cfg)
 
-        # 2️⃣ Send to Bedrock → completion
+        # 2️⃣ Render output filename from template using variables
+        filename_template = cfg["output_file"]
+        filename_rendered = Template(filename_template).render(**cfg["variables"])
+
+        # 3️⃣ Send to Bedrock → completion
         completion = call_bedrock(rendered_prompt, region=region)
 
-        # 3️⃣ Write to disk
-        out_file = pathlib.Path("outputs") / cfg["output_file"]
+        # 4️⃣ Write to disk
+        out_file = pathlib.Path("outputs") / filename_rendered
         out_file.write_text(completion, encoding="utf-8")
 
-        # 4️⃣ Upload to S3
-        s3_key = f"{prefix}{out_file.name}"
+        # 5️⃣ Upload to S3 with rendered filename
+        s3_key = f"{prefix}{filename_rendered}"
         s3.upload_file(out_file.as_posix(), bucket, s3_key, ExtraArgs={"ContentType": "text/html"})
         print(f"✅ Uploaded ➜  s3://{bucket}/{s3_key}")
 
 
 if __name__ == "__main__":
     main(os.getenv("DEPLOY_ENV", "beta"))
-    
