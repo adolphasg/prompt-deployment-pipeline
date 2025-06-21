@@ -1,0 +1,8 @@
+Hi {{student_name}},
+
+Welcome to Pixel Learning Co.! Here are three quick tips to get started:
+1. {{tip1}}
+2. {{tip2}}
+3. {{tip3}}
+
+Happy learning!
